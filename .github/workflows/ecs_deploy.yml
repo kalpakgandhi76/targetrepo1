@@ -1,0 +1,73 @@
+name: Build, push, and deploy container image
+ 
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      region:
+        description: 'region to deploy (e.g., us-east-1)'
+        required: true
+        type: string
+      ecrrepositoryname:
+        description: 'ecr repository name to deploy'
+        required: true
+        type: string
+      ecsclustername:
+        description: 'The ecs cluster name for deployment'
+        required: true
+        type: string
+      ecsservicename:
+        description: 'The ecs service name for deployment'
+        required: true
+        type: string
+jobs:
+  build-push-deploy:
+    runs-on: ubuntu-latest
+ 
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout Code
+        uses: actions/checkout@v2
+ 
+      # Step 2: Configure Git
+      - name: Configure Git
+        run: |
+          git config --global user.email "prayanka.gochipatula@valuemomentum.com"
+          git config --global user.name "prayankag"
+        env:
+          CI: true
+      
+      # Step 3: Setup Node.js (Installs Node.js and npm)
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18 # Specify the Node.js version to use (e.g., 16 or latest)
+
+      # Step 4: Install npm Dependencies
+      - name: Install npm Dependencies
+        run: npm install
+      
+      # Configure AWS credentials
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ github.event.inputs.region }}
+
+      # Step 3: Authenticate with AWS ECR
+      - name: Authenticate with AWS ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v1
+ 
+      # Step 4: Build and push the Docker image to AWS ECR
+      - name: Build and Push Docker Image
+        env:
+          ECR_REPOSITORY: ${{ github.event.inputs.ecrrepositoryname }}
+        run: |
+          aws ecr get-login-password --region ${{ github.event.inputs.region }} | docker login --username AWS --password-stdin 148761635088.dkr.ecr.${{ github.event.inputs.region }}.amazonaws.com
+          docker build -t $ECR_REPOSITORY:latest .
+          docker tag ${{ github.event.inputs.ecrrepositoryname }}:latest 148761635088.dkr.ecr.${{ github.event.inputs.region }}.amazonaws.com/$ECR_REPOSITORY:latest
+          docker push 148761635088.dkr.ecr.${{ github.event.inputs.region }}.amazonaws.com/$ECR_REPOSITORY:latest      
